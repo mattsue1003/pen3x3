@@ -5,11 +5,12 @@ import { Printer, RefreshCw, Settings2, Download, Loader2 } from 'lucide-react';
 // Constants & Utils
 // ----------------------------------------------------------------------
 
-const DOT_SPACING = 40; 
+const DOT_SPACING = 40; // 縮減間距以符合三欄佈局
 const PADDING = 15;
 const GRID_SIZE = 3;
-const ITEMS_PER_PAGE = 6; 
+const ITEMS_PER_PAGE = 6; // 每頁 6 題
 
+// 動態載入外部腳本 (為了 PDF 生成)
 const loadScript = (src) => {
   return new Promise((resolve, reject) => {
     if (document.querySelector(`script[src="${src}"]`)) return resolve();
@@ -75,14 +76,14 @@ const DotGrid = ({ path = [], showPath = true }) => {
     <svg 
       viewBox={`0 0 ${viewBoxSize} ${viewBoxSize}`} 
       className="w-full h-auto"
-      style={{ maxWidth: '120px', maxHeight: '120px' }}
+      style={{ maxWidth: '120px', maxHeight: '120px' }} // 縮小 SVG 尺寸以適應 3 欄
     >
       {showPath && path.length > 1 && (
         <polyline
           points={path.map(p => `${p.x * DOT_SPACING + PADDING},${p.y * DOT_SPACING + PADDING}`).join(' ')}
           fill="none"
           stroke="#000000"
-          strokeWidth="5"
+          strokeWidth="5" // 適度減輕粗度，與縮小後的方格協調
           strokeLinecap="round"
           strokeLinejoin="round"
         />
@@ -93,7 +94,7 @@ const DotGrid = ({ path = [], showPath = true }) => {
           key={i}
           cx={dot.x * DOT_SPACING + PADDING}
           cy={dot.y * DOT_SPACING + PADDING}
-          r="5"
+          r="5" // 適度減小點點
           className="fill-slate-400 print:fill-gray-500"
         />
       ))}
@@ -121,10 +122,10 @@ const ExerciseCard = ({ path }) => {
 };
 
 const PageHeader = () => (
-  <div className="border-b-4 border-slate-900 pb-4 mb-4 flex justify-between items-end">
+  <div className="border-b-4 border-slate-900 pb-4 mb-8 flex justify-between items-end">
     <div>
       <h2 className="text-3xl font-black text-slate-900 tracking-tight">運筆練習：3x3 連線卷</h2>
-      <p className="text-slate-500 text-sm font-bold mt-1">請看上方圖案，並在下方點點中畫出一樣的線條。</p>
+      <p className="text-slate-500 text-sm font-bold mt-1">請看左側圖案，並在右側點點中畫出一樣的線條。</p>
     </div>
     <div className="text-right text-base font-black text-slate-700 space-y-1">
       <div>日期：20____ / ____ / ____</div>
@@ -175,7 +176,7 @@ export default function App() {
 
       for (let i = 0; i < pages.length; i++) {
         const canvas = await window.html2canvas(pages[i], {
-          scale: 3, 
+          scale: 3, // 提高縮放倍率以確保更高品質
           useCORS: true,
           logging: false,
         });
@@ -205,7 +206,7 @@ export default function App() {
                 <Settings2 className="text-blue-500" size={32} />
                 運筆練習產生器 (上三下三版)
               </h1>
-              <p className="text-slate-500 font-bold mt-1">已優化垂直間距，讓 A4 版面更豐富</p>
+              <p className="text-slate-500 font-bold mt-1">A4 每頁 6 題，適中大小更有助於專注</p>
             </div>
             
             <div className="flex flex-wrap gap-3">
@@ -283,30 +284,20 @@ export default function App() {
             key={pageIdx} 
             className="a4-page bg-white shadow-2xl print:shadow-none print:m-0 overflow-hidden"
           >
-            <div className="h-full p-[20mm] flex flex-col">
+            <div className="h-full p-[15mm] flex flex-col">
               <PageHeader />
               
-              {/* 使用 flex-1 與 justify-around 來撐開上下兩排的距離 */}
-              <div className="flex-1 flex flex-col justify-around py-4">
-                {/* 上排三題 */}
-                <div className="grid grid-cols-3 gap-8">
-                  {pageItems.slice(0, 3).map((path, itemIdx) => (
-                    <ExerciseCard key={itemIdx} path={path} />
-                  ))}
-                </div>
-
-                {/* 下排三題 */}
-                <div className="grid grid-cols-3 gap-8">
-                  {pageItems.slice(3, 6).map((path, itemIdx) => (
-                    <ExerciseCard key={itemIdx + 3} path={path} />
-                  ))}
-                </div>
+              {/* 改為 grid-cols-3 實現上三下三佈局 */}
+              <div className="grid grid-cols-3 gap-6 flex-1 content-start">
+                {pageItems.map((path, itemIdx) => (
+                  <ExerciseCard key={itemIdx} path={path} />
+                ))}
               </div>
 
               {/* Footer */}
-              <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center text-xs font-bold text-slate-400 print:text-gray-500">
+              <div className="mt-8 pt-4 border-t border-slate-100 flex justify-between items-center text-xs font-bold text-slate-400 print:text-gray-500">
                 <span>難度指數：{complexity}</span>
-                <span>3x3 空間感知訓練 • 寬鬆佈局版</span>
+                <span>3x3 空間感知訓練 • 每頁 6 題</span>
                 <span>第 {pageIdx + 1} 頁</span>
               </div>
             </div>
