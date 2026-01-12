@@ -1,365 +1,321 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Printer, RefreshCw, Settings2, Download, Loader2 } from 'lucide-react';
-
-// ----------------------------------------------------------------------
-// Constants & Utils
-// ----------------------------------------------------------------------
-
-const DOT_SPACING = 40; 
-const PADDING = 15;
-const GRID_SIZE = 3;
-const ITEMS_PER_PAGE = 6; 
-
-const loadScript = (src) => {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) return resolve();
-    const script = document.createElement('script');
-    script.src = src;
-    script.onload = resolve;
-    script.onerror = reject;
-    document.head.appendChild(script);
-  });
-};
-
-const generateRandomPattern = (segmentsCount = 4) => {
-  const points = [];
-  for (let i = 0; i < GRID_SIZE; i++) {
-    for (let j = 0; j < GRID_SIZE; j++) {
-      points.push({ x: i, y: j });
-    }
-  }
-
-  const path = [];
-  let current = points[Math.floor(Math.random() * points.length)];
-  path.push(current);
-
-  const used = new Set([`${current.x},${current.y}`]);
-
-  for (let i = 0; i < segmentsCount; i++) {
-    const neighbors = [];
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dy = -1; dy <= 1; dy++) {
-        if (dx === 0 && dy === 0) continue;
-        const nx = current.x + dx;
-        const ny = current.y + dy;
-        if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE && !used.has(`${nx},${ny}`)) {
-          neighbors.push({ x: nx, y: ny });
-        }
-      }
-    }
-
-    if (neighbors.length === 0) break;
-    const next = neighbors[Math.floor(Math.random() * neighbors.length)];
-    path.push(next);
-    used.add(`${next.x},${next.y}`);
-    current = next;
-  }
-  return path;
-};
-
-// ----------------------------------------------------------------------
-// Components
-// ----------------------------------------------------------------------
-
-const DotGrid = ({ path = [], showPath = true }) => {
-  const dots = [];
-  for (let y = 0; y < GRID_SIZE; y++) {
-    for (let x = 0; x < GRID_SIZE; x++) {
-      dots.push({ x, y });
-    }
-  }
-
-  const viewBoxSize = (GRID_SIZE - 1) * DOT_SPACING + PADDING * 2;
-
-  return (
-    <svg 
-      viewBox={`0 0 ${viewBoxSize} ${viewBoxSize}`} 
-      className="w-full h-auto"
-      style={{ maxWidth: '120px', maxHeight: '120px' }}
-    >
-      {showPath && path.length > 1 && (
-        <polyline
-          points={path.map(p => `${p.x * DOT_SPACING + PADDING},${p.y * DOT_SPACING + PADDING}`).join(' ')}
-          fill="none"
-          stroke="#000000"
-          strokeWidth="5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      )}
-      
-      {dots.map((dot, i) => (
-        <circle
-          key={i}
-          cx={dot.x * DOT_SPACING + PADDING}
-          cy={dot.y * DOT_SPACING + PADDING}
-          r="5"
-          className="fill-slate-400 print:fill-gray-500"
-        />
-      ))}
-    </svg>
-  );
-};
-
-const ExerciseCard = ({ path }) => {
-  return (
-    <div className="flex flex-col items-center border-2 border-slate-100 p-4 rounded-xl bg-white print:border-gray-300 print:p-4 h-full justify-between shadow-sm">
-      <div className="w-full text-center">
-        <div className="text-sm font-black text-slate-700 mb-2 print:text-black">【看這題】</div>
-        <div className="flex justify-center border-b-2 border-dashed border-slate-50 pb-4 mb-4 print:border-gray-200">
-           <DotGrid path={path} showPath={true} />
-        </div>
-      </div>
-      <div className="w-full text-center">
-        <div className="text-sm font-black text-slate-700 mb-2 print:text-black">【照著畫】</div>
-        <div className="flex justify-center">
-          <DotGrid path={path} showPath={false} />
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const PageHeader = () => (
-  <div className="border-b-4 border-slate-900 pb-4 mb-4 flex justify-between items-end">
-    <div>
-      <h2 className="text-3xl font-black text-slate-900 tracking-tight">運筆練習：3x3 連線卷</h2>
-      <p className="text-slate-500 text-sm font-bold mt-1">請看上方圖案，並在下方點點中畫出一樣的線條。</p>
-    </div>
-    <div className="text-right text-base font-black text-slate-700 space-y-1">
-      <div>日期：20____ / ____ / ____</div>
-      <div>姓名：________________</div>
-    </div>
-  </div>
-);
-
-// ----------------------------------------------------------------------
-// Main Application
-// ----------------------------------------------------------------------
-
-export default function App() {
-  const [pagesCount, setPagesCount] = useState(1);
-  const [complexity, setComplexity] = useState(4);
-  const [allPagesData, setAllPagesData] = useState([]);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const containerRef = useRef(null);
-
-  const generateData = useCallback(() => {
-    const totalItems = pagesCount * ITEMS_PER_PAGE;
-    const items = Array.from({ length: totalItems }, () => generateRandomPattern(complexity));
-    
-    const pages = [];
-    for (let i = 0; i < items.length; i += ITEMS_PER_PAGE) {
-      pages.push(items.slice(i, i + ITEMS_PER_PAGE));
-    }
-    setAllPagesData(pages);
-  }, [pagesCount, complexity]);
-
-  useEffect(() => {
-    generateData();
-  }, [generateData]);
-
-  const handlePrint = () => {
-    window.print();
-  };
-
-  const downloadPdf = async () => {
-    setIsGenerating(true);
-    try {
-      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
-      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
-
-      const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pages = containerRef.current.querySelectorAll('.a4-page');
-
-      for (let i = 0; i < pages.length; i++) {
-        const canvas = await window.html2canvas(pages[i], {
-          scale: 3, 
-          useCORS: true,
-          logging: false,
-        });
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>運筆練習產生器 - 3x3 連線卷</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React and Babel -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- PDF Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
         
-        if (i > 0) pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
-      }
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+        }
 
-      pdf.save(`運筆練習卷_3x3_${new Date().toLocaleDateString()}.pdf`);
-    } catch (error) {
-      console.error('PDF 生成失敗', error);
-      alert('PDF 生成失敗，請嘗試使用列印按鈕另存 PDF。');
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-slate-100 p-4 md:p-8 font-sans">
-      {/* Sidebar Controls - Hidden on Print */}
-      <div className="max-w-5xl mx-auto mb-8 print:hidden">
-        <div className="bg-white rounded-3xl shadow-xl p-8 border border-slate-200">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
-            <div>
-              <h1 className="text-2xl font-black text-slate-800 flex items-center gap-3">
-                <Settings2 className="text-blue-500" size={32} />
-                運筆練習產生器 (上三下三版)
-              </h1>
-              <p className="text-slate-500 font-bold mt-1">已優化垂直間距，讓 A4 版面更豐富</p>
-            </div>
-            
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={generateData}
-                disabled={isGenerating}
-                className="flex items-center gap-2 px-4 py-3 bg-slate-50 text-slate-700 font-black rounded-xl hover:bg-slate-100 transition-all disabled:opacity-50"
-              >
-                <RefreshCw size={20} className={isGenerating ? "animate-spin" : ""} />
-                換一組題目
-              </button>
-              
-              <button
-                onClick={handlePrint}
-                disabled={isGenerating}
-                className="flex items-center gap-2 px-5 py-3 bg-slate-800 text-white font-black rounded-xl hover:bg-black shadow-lg transition-all active:scale-95 disabled:opacity-50"
-              >
-                <Printer size={20} />
-                電腦列印
-              </button>
-
-              <button
-                onClick={downloadPdf}
-                disabled={isGenerating}
-                className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-black rounded-xl hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all active:scale-95 text-lg disabled:opacity-50"
-              >
-                {isGenerating ? <Loader2 className="animate-spin" size={20} /> : <Download size={20} />}
-                手機 PDF 下載
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-10 mt-8 pt-8 border-t-2 border-slate-50">
-            <div>
-              <label className="block text-lg font-black text-slate-700 mb-4">
-                生成份數 (A4 頁數)
-              </label>
-              <div className="flex items-center gap-6">
-                <input 
-                  type="range" 
-                  min="1" 
-                  max="10" 
-                  value={pagesCount} 
-                  onChange={(e) => setPagesCount(parseInt(e.target.value))}
-                  className="flex-1 h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                />
-                <span className="text-3xl font-black text-blue-600 min-w-[3.5rem] text-center">{pagesCount}</span>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-lg font-black text-slate-700 mb-4">
-                題目難度 (Lv.)
-              </label>
-              <div className="flex items-center gap-6">
-                <input 
-                  type="range" 
-                  min="2" 
-                  max="7" 
-                  value={complexity} 
-                  onChange={(e) => setComplexity(parseInt(e.target.value))}
-                  className="flex-1 h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                />
-                <span className="text-3xl font-black text-blue-600 min-w-[3.5rem] text-center">{complexity}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Pages Rendering */}
-      <div ref={containerRef} className="flex flex-col items-center gap-12 print:gap-0 print:block">
-        {allPagesData.map((pageItems, pageIdx) => (
-          <div 
-            key={pageIdx} 
-            className="a4-page bg-white shadow-2xl print:shadow-none print:m-0 overflow-hidden"
-          >
-            <div className="h-full p-[20mm] flex flex-col">
-              <PageHeader />
-              
-              {/* 使用 flex-1 與 justify-around 來撐開上下兩排的距離 */}
-              <div className="flex-1 flex flex-col justify-around py-4">
-                {/* 上排三題 */}
-                <div className="grid grid-cols-3 gap-8">
-                  {pageItems.slice(0, 3).map((path, itemIdx) => (
-                    <ExerciseCard key={itemIdx} path={path} />
-                  ))}
-                </div>
-
-                {/* 下排三題 */}
-                <div className="grid grid-cols-3 gap-8">
-                  {pageItems.slice(3, 6).map((path, itemIdx) => (
-                    <ExerciseCard key={itemIdx + 3} path={path} />
-                  ))}
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center text-xs font-bold text-slate-400 print:text-gray-500">
-                <span>難度指數：{complexity}</span>
-                <span>3x3 空間感知訓練 • 寬鬆佈局版</span>
-                <span>第 {pageIdx + 1} 頁</span>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Styles for A4 and Print */}
-      <style>{`
         .a4-page {
-          width: 210mm;
-          height: 297mm;
-          min-width: 210mm;
-          min-height: 297mm;
-          box-sizing: border-box;
-          background-color: white;
+            width: 210mm;
+            height: 297mm;
+            min-width: 210mm;
+            min-height: 297mm;
+            box-sizing: border-box;
+            background-color: white;
+            margin-bottom: 2rem;
         }
 
         @media screen and (max-width: 210mm) {
-          .a4-page {
-            width: 95vw;
-            height: 134.3vw;
-            margin-bottom: 2rem;
-          }
+            .a4-page {
+                width: 95vw;
+                height: 134.3vw;
+                min-width: unset;
+                min-height: unset;
+            }
         }
 
         @media print {
-          @page {
-            size: A4;
-            margin: 0;
-          }
-          body {
-            background: white !important;
-            margin: 0;
-            padding: 0;
-          }
-          .min-h-screen {
-            background: white !important;
-            padding: 0 !important;
-          }
-          .a4-page {
-            width: 210mm;
-            height: 297mm;
-            margin: 0;
-            page-break-after: always;
-            box-shadow: none !important;
-            border: none !important;
-          }
-          .a4-page:last-child {
-            page-break-after: auto;
-          }
+            @page {
+                size: A4;
+                margin: 0;
+            }
+            body {
+                background: white !important;
+                margin: 0;
+                padding: 0;
+            }
+            .print-hidden {
+                display: none !important;
+            }
+            .a4-page {
+                margin: 0;
+                page-break-after: always;
+                box-shadow: none !important;
+                border: none !important;
+                width: 210mm;
+                height: 297mm;
+            }
+            .a4-page:last-child {
+                page-break-after: auto;
+            }
         }
-      `}</style>
-    </div>
-  );
-}
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useRef } = React;
+
+        // --- Icons (Inline SVGs) ---
+        const IconPrinter = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+        );
+        const IconRefresh = ({ className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+        );
+        const IconSettings = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500"><path d="M20 7h-9"></path><path d="M14 17H5"></path><circle cx="17" cy="17" r="3"></circle><circle cx="7" cy="7" r="3"></circle></svg>
+        );
+        const IconDownload = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        );
+        const IconLoader = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>
+        );
+
+        // --- Constants & Utils ---
+        const DOT_SPACING = 40;
+        const PADDING = 15;
+        const GRID_SIZE = 3;
+        const ITEMS_PER_PAGE = 6;
+
+        const generateRandomPattern = (segmentsCount = 4) => {
+            const points = [];
+            for (let i = 0; i < GRID_SIZE; i++) {
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    points.push({ x: i, y: j });
+                }
+            }
+
+            const path = [];
+            let current = points[Math.floor(Math.random() * points.length)];
+            path.push(current);
+            const used = new Set([`${current.x},${current.y}`]);
+
+            for (let i = 0; i < segmentsCount; i++) {
+                const neighbors = [];
+                for (let dx = -1; dx <= 1; dx++) {
+                    for (let dy = -1; dy <= 1; dy++) {
+                        if (dx === 0 && dy === 0) continue;
+                        const nx = current.x + dx;
+                        const ny = current.y + dy;
+                        if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE && !used.has(`${nx},${ny}`)) {
+                            neighbors.push({ x: nx, y: ny });
+                        }
+                    }
+                }
+                if (neighbors.length === 0) break;
+                const next = neighbors[Math.floor(Math.random() * neighbors.length)];
+                path.push(next);
+                used.add(`${next.x},${next.y}`);
+                current = next;
+            }
+            return path;
+        };
+
+        // --- Components ---
+        const DotGrid = ({ path = [], showPath = true }) => {
+            const dots = [];
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    dots.push({ x, y });
+                }
+            }
+            const viewBoxSize = (GRID_SIZE - 1) * DOT_SPACING + PADDING * 2;
+
+            return (
+                <svg viewBox={`0 0 ${viewBoxSize} ${viewBoxSize}`} className="w-full h-auto" style={{ maxWidth: '120px', maxHeight: '120px' }}>
+                    {showPath && path.length > 1 && (
+                        <polyline
+                            points={path.map(p => `${p.x * DOT_SPACING + PADDING},${p.y * DOT_SPACING + PADDING}`).join(' ')}
+                            fill="none"
+                            stroke="#000000"
+                            strokeWidth="5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        />
+                    )}
+                    {dots.map((dot, i) => (
+                        <circle key={i} cx={dot.x * DOT_SPACING + PADDING} cy={dot.y * DOT_SPACING + PADDING} r="5" className="fill-slate-400 print:fill-gray-500" />
+                    ))}
+                </svg>
+            );
+        };
+
+        const ExerciseCard = ({ path }) => (
+            <div className="flex flex-col items-center border-2 border-slate-100 p-4 rounded-xl bg-white print:border-gray-300 print:p-4 h-full justify-between shadow-sm">
+                <div className="w-full text-center">
+                    <div className="text-sm font-black text-slate-700 mb-2 print:text-black">【看這題】</div>
+                    <div className="flex justify-center border-b-2 border-dashed border-slate-50 pb-4 mb-4 print:border-gray-200">
+                        <DotGrid path={path} showPath={true} />
+                    </div>
+                </div>
+                <div className="w-full text-center">
+                    <div className="text-sm font-black text-slate-700 mb-2 print:text-black">【照著畫】</div>
+                    <div className="flex justify-center">
+                        <DotGrid path={path} showPath={false} />
+                    </div>
+                </div>
+            </div>
+        );
+
+        const PageHeader = () => (
+            <div className="border-b-4 border-slate-900 pb-4 mb-4 flex justify-between items-end">
+                <div>
+                    <h2 className="text-3xl font-black text-slate-900 tracking-tight">運筆練習：3x3 連線卷</h2>
+                    <p className="text-slate-500 text-sm font-bold mt-1">請看上方圖案，並在下方點點中畫出一樣的線條。</p>
+                </div>
+                <div className="text-right text-base font-black text-slate-700 space-y-1">
+                    <div>日期：20____ / ____ / ____</div>
+                    <div>姓名：________________</div>
+                </div>
+            </div>
+        );
+
+        // --- Main App ---
+        function App() {
+            const [pagesCount, setPagesCount] = useState(1);
+            const [complexity, setComplexity] = useState(4);
+            const [allPagesData, setAllPagesData] = useState([]);
+            const [isGenerating, setIsGenerating] = useState(false);
+            const containerRef = useRef(null);
+
+            const generateData = useCallback(() => {
+                const totalItems = pagesCount * ITEMS_PER_PAGE;
+                const items = Array.from({ length: totalItems }, () => generateRandomPattern(complexity));
+                const pages = [];
+                for (let i = 0; i < items.length; i += ITEMS_PER_PAGE) {
+                    pages.push(items.slice(i, i + ITEMS_PER_PAGE));
+                }
+                setAllPagesData(pages);
+            }, [pagesCount, complexity]);
+
+            useEffect(() => {
+                generateData();
+            }, [generateData]);
+
+            const handlePrint = () => {
+                window.print();
+            };
+
+            const downloadPdf = async () => {
+                setIsGenerating(true);
+                try {
+                    const { jsPDF } = window.jspdf;
+                    const pdf = new jsPDF('p', 'mm', 'a4');
+                    const pages = containerRef.current.querySelectorAll('.a4-page');
+
+                    for (let i = 0; i < pages.length; i++) {
+                        const canvas = await html2canvas(pages[i], {
+                            scale: 2,
+                            useCORS: true,
+                            logging: false,
+                        });
+                        const imgData = canvas.toDataURL('image/jpeg', 0.9);
+                        if (i > 0) pdf.addPage();
+                        pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
+                    }
+
+                    pdf.save(`運筆練習卷_3x3_${new Date().getTime()}.pdf`);
+                } catch (error) {
+                    console.error('PDF 生成失敗', error);
+                } finally {
+                    setIsGenerating(false);
+                }
+            };
+
+            return (
+                <div className="p-4 md:p-8 font-sans">
+                    {/* Controls */}
+                    <div className="max-w-5xl mx-auto mb-8 print-hidden">
+                        <div className="bg-white rounded-3xl shadow-xl p-8 border border-slate-200">
+                            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
+                                <div>
+                                    <h1 className="text-2xl font-black text-slate-800 flex items-center gap-3">
+                                        <IconSettings />
+                                        運筆練習產生器 (3x3 版)
+                                    </h1>
+                                    <p className="text-slate-500 font-bold mt-1">自主練習空間感知與精細動作</p>
+                                </div>
+                                <div className="flex flex-wrap gap-3">
+                                    <button onClick={generateData} className="flex items-center gap-2 px-4 py-3 bg-slate-50 text-slate-700 font-black rounded-xl hover:bg-slate-100 transition-all">
+                                        <IconRefresh className={isGenerating ? "animate-spin" : ""} />
+                                        換一組題目
+                                    </button>
+                                    <button onClick={handlePrint} className="flex items-center gap-2 px-5 py-3 bg-slate-800 text-white font-black rounded-xl hover:bg-black shadow-lg transition-all active:scale-95">
+                                        <IconPrinter />
+                                        電腦列印
+                                    </button>
+                                    <button onClick={downloadPdf} disabled={isGenerating} className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-black rounded-xl hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all active:scale-95 text-lg disabled:opacity-50">
+                                        {isGenerating ? <IconLoader /> : <IconDownload />}
+                                        下載 PDF
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-10 mt-8 pt-8 border-t-2 border-slate-50">
+                                <div>
+                                    <label className="block text-lg font-black text-slate-700 mb-4">生成份數 (A4 頁數)</label>
+                                    <div className="flex items-center gap-6">
+                                        <input type="range" min="1" max="10" value={pagesCount} onChange={(e) => setPagesCount(parseInt(e.target.value))} className="flex-1 h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600" />
+                                        <span className="text-3xl font-black text-blue-600 min-w-[3.5rem] text-center">{pagesCount}</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-lg font-black text-slate-700 mb-4">題目難度 (Lv.)</label>
+                                    <div className="flex items-center gap-6">
+                                        <input type="range" min="2" max="7" value={complexity} onChange={(e) => setComplexity(parseInt(e.target.value))} className="flex-1 h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600" />
+                                        <span className="text-3xl font-black text-blue-600 min-w-[3.5rem] text-center">{complexity}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Paper Area */}
+                    <div ref={containerRef} className="flex flex-col items-center">
+                        {allPagesData.map((pageItems, pageIdx) => (
+                            <div key={pageIdx} className="a4-page shadow-2xl print:shadow-none overflow-hidden">
+                                <div className="h-full p-[20mm] flex flex-col">
+                                    <PageHeader />
+                                    <div className="flex-1 flex flex-col justify-around py-4">
+                                        <div className="grid grid-cols-3 gap-8">
+                                            {pageItems.slice(0, 3).map((path, idx) => <ExerciseCard key={idx} path={path} />)}
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-8">
+                                            {pageItems.slice(3, 6).map((path, idx) => <ExerciseCard key={idx + 3} path={path} />)}
+                                        </div>
+                                    </div>
+                                    <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center text-xs font-bold text-slate-400">
+                                        <span>難度指數：{complexity}</span>
+                                        <span>3x3 空間感知訓練</span>
+                                        <span>第 {pageIdx + 1} 頁</span>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
