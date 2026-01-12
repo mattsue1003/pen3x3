@@ -18,7 +18,7 @@
         
         body {
             font-family: 'Noto Sans TC', sans-serif;
-            background-color: #f1f5f9;
+            background-color: #f8fafc;
         }
 
         .a4-page {
@@ -28,8 +28,8 @@
             min-height: 297mm;
             box-sizing: border-box;
             background-color: white;
-            margin-bottom: 2rem;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            margin-bottom: 3rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
         }
 
         @media screen and (max-width: 210mm) {
@@ -38,6 +38,7 @@
                 height: 134.3vw;
                 min-width: unset;
                 min-height: unset;
+                margin-bottom: 1.5rem;
             }
         }
 
@@ -55,7 +56,7 @@
                 display: none !important;
             }
             .a4-page {
-                margin: 0;
+                margin: 0 !important;
                 page-break-after: always;
                 box-shadow: none !important;
                 border: none !important;
@@ -82,13 +83,16 @@
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
         );
         const IconSettings = () => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500"><path d="M20 7h-9"></path><path d="M14 17H5"></path><circle cx="17" cy="17" r="3"></circle><circle cx="7" cy="7" r="3"></circle></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600"><path d="M20 7h-9"></path><path d="M14 17H5"></path><circle cx="17" cy="17" r="3"></circle><circle cx="7" cy="7" r="3"></circle></svg>
         );
         const IconDownload = () => (
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
         );
         const IconLoader = () => (
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>
+        );
+        const IconExternal = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline ml-1"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
         );
 
         // --- 常數與邏輯 ---
@@ -179,10 +183,10 @@
         const PageHeader = () => (
             <div className="border-b-4 border-slate-900 pb-4 mb-4 flex justify-between items-end">
                 <div>
-                    <h2 className="text-3xl font-black text-slate-900 tracking-tight">運筆練習：3x3 連線卷</h2>
-                    <p className="text-slate-500 text-sm font-bold mt-1">請看上方圖案，並在下方點點中畫出一樣的線條。</p>
+                    <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">運筆練習：3x3 連線卷</h2>
+                    <p className="text-slate-500 text-xs md:text-sm font-bold mt-1">請看上方圖案，並在下方點點中畫出一樣的線條。</p>
                 </div>
-                <div className="text-right text-base font-black text-slate-700 space-y-1">
+                <div className="text-right text-xs md:text-base font-black text-slate-700 space-y-1">
                     <div>日期：20____ / ____ / ____</div>
                     <div>姓名：________________</div>
                 </div>
@@ -216,7 +220,12 @@
             };
 
             const downloadPdf = async () => {
+                if (isGenerating) return;
                 setIsGenerating(true);
+                
+                // 強制回到頁面頂端，確保 html2canvas 能完整捕捉 A4 區塊
+                window.scrollTo(0, 0);
+
                 try {
                     const { jsPDF } = window.jspdf;
                     const pdf = new jsPDF('p', 'mm', 'a4');
@@ -224,17 +233,25 @@
 
                     for (let i = 0; i < pages.length; i++) {
                         const canvas = await html2canvas(pages[i], {
-                            scale: 2,
+                            scale: 1.5, // 適中的縮放，兼顧品質與手機性能
                             useCORS: true,
                             logging: false,
+                            backgroundColor: '#ffffff',
+                            // 確保獲取隱藏在捲動區域外的內容
+                            windowWidth: 210 * 3.78, // A4 px 換算
+                            windowHeight: 297 * 3.78
                         });
-                        const imgData = canvas.toDataURL('image/jpeg', 0.9);
+                        
+                        const imgData = canvas.toDataURL('image/jpeg', 0.85);
                         if (i > 0) pdf.addPage();
                         pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
                     }
-                    pdf.save(`運筆練習卷_3x3_${new Date().getTime()}.pdf`);
+                    
+                    const fileName = `運筆練習_3x3_難度${complexity}_${new Date().getTime()}.pdf`;
+                    pdf.save(fileName);
                 } catch (error) {
                     console.error('PDF 生成失敗', error);
+                    alert('PDF 生成失敗，建議使用電腦版或試卷列印功能。');
                 } finally {
                     setIsGenerating(false);
                 }
@@ -244,8 +261,8 @@
                 <div className="p-4 md:p-8 font-sans">
                     {/* 控制面板 */}
                     <div className="max-w-5xl mx-auto mb-8 print-hidden">
-                        <div className="bg-white rounded-3xl shadow-xl p-8 border border-slate-200">
-                            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
+                        <div className="bg-white rounded-3xl shadow-xl p-6 md:p-8 border border-slate-200">
+                            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                                 <div>
                                     <h1 className="text-2xl font-black text-slate-800 flex items-center gap-3">
                                         <IconSettings />
@@ -253,22 +270,33 @@
                                     </h1>
                                     <p className="text-slate-500 font-bold mt-1">自主練習空間感知與精細動作</p>
                                 </div>
-                                <div className="flex flex-wrap gap-3">
-                                    <button onClick={generateData} className="flex items-center gap-2 px-4 py-3 bg-slate-50 text-slate-700 font-black rounded-xl hover:bg-slate-100 transition-all">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex gap-3">
+                                    <button 
+                                        onClick={generateData} 
+                                        className="flex items-center justify-center gap-2 px-4 py-3 bg-slate-100 text-slate-700 font-black rounded-xl hover:bg-slate-200 transition-all active:scale-95"
+                                    >
                                         <IconRefresh className={isGenerating ? "animate-spin" : ""} />
                                         換一組題目
                                     </button>
-                                    <button onClick={handlePrint} className="flex items-center gap-2 px-5 py-3 bg-slate-800 text-white font-black rounded-xl hover:bg-black shadow-lg transition-all active:scale-95">
+                                    <button 
+                                        onClick={handlePrint} 
+                                        className="flex items-center justify-center gap-2 px-5 py-3 bg-slate-800 text-white font-black rounded-xl hover:bg-black shadow-lg transition-all active:scale-95"
+                                    >
                                         <IconPrinter />
-                                        列印試卷
+                                        電腦列印
                                     </button>
-                                    <button onClick={downloadPdf} disabled={isGenerating} className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-black rounded-xl hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all active:scale-95 text-lg disabled:opacity-50">
+                                    <button 
+                                        onClick={downloadPdf} 
+                                        disabled={isGenerating} 
+                                        className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white font-black rounded-xl hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all active:scale-95 sm:col-span-2 lg:col-auto disabled:bg-blue-300"
+                                    >
                                         {isGenerating ? <IconLoader /> : <IconDownload />}
-                                        下載 PDF
+                                        {isGenerating ? "產生中..." : "下載 PDF (手機可用)"}
                                     </button>
                                 </div>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-10 mt-8 pt-8 border-t-2 border-slate-50">
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8 pt-8 border-t-2 border-slate-50">
                                 <div>
                                     <label className="block text-lg font-black text-slate-700 mb-4">生成頁數 (A4)</label>
                                     <div className="flex items-center gap-6">
@@ -284,32 +312,67 @@
                                     </div>
                                 </div>
                             </div>
+
+                            {/* 設計者與新書資訊 */}
+                            <div className="mt-8 pt-6 border-t border-slate-100">
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                    <div className="text-sm">
+                                        <span className="font-bold text-slate-700">設計者：</span>
+                                        <a 
+                                            href="https://www.facebook.com/profile.php?id=100063748491881" 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="text-blue-600 font-bold hover:underline inline-flex items-center"
+                                        >
+                                            鍾孟修職能治療師
+                                            <IconExternal />
+                                        </a>
+                                    </div>
+                                    <div className="text-sm">
+                                        <span className="font-bold text-slate-700">最新著作：</span>
+                                        <a 
+                                            href="https://www.books.com.tw/products/0011022363?sloc=main" 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="text-orange-600 font-bold hover:underline inline-flex items-center"
+                                        >
+                                            讓你健康不失智的體智能
+                                            <IconExternal />
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    {/* 預覽區域 */}
+                    {/* 試卷區域 */}
                     <div ref={containerRef} className="flex flex-col items-center">
                         {allPagesData.map((pageItems, pageIdx) => (
                             <div key={pageIdx} className="a4-page overflow-hidden">
-                                <div className="h-full p-[20mm] flex flex-col">
+                                <div className="h-full p-[15mm] md:p-[20mm] flex flex-col">
                                     <PageHeader />
                                     <div className="flex-1 flex flex-col justify-around py-4">
-                                        <div className="grid grid-cols-3 gap-8">
+                                        <div className="grid grid-cols-3 gap-4 md:gap-8">
                                             {pageItems.slice(0, 3).map((path, idx) => <ExerciseCard key={idx} path={path} />)}
                                         </div>
-                                        <div className="grid grid-cols-3 gap-8">
+                                        <div className="grid grid-cols-3 gap-4 md:gap-8">
                                             {pageItems.slice(3, 6).map((path, idx) => <ExerciseCard key={idx + 3} path={path} />)}
                                         </div>
                                     </div>
-                                    <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center text-xs font-bold text-slate-400">
+                                    <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center text-[10px] md:text-xs font-bold text-slate-400">
                                         <span>難度指數：{complexity}</span>
-                                        <span>3x3 空間感知訓練</span>
+                                        <span className="hidden sm:inline">3x3 空間感知訓練 • 設計：鍾孟修職能治療師</span>
                                         <span>第 {pageIdx + 1} 頁</span>
                                     </div>
                                 </div>
                             </div>
                         ))}
                     </div>
+                    
+                    {/* 底欄 */}
+                    <footer className="text-center text-slate-400 text-xs py-8 print-hidden">
+                        © 2024 運筆練習產生器 - 鍾孟修職能治療師 設計
+                    </footer>
                 </div>
             );
         }
