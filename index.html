@@ -4,13 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>運筆練習產生器 - 3x3 連線卷</title>
-    <!-- 引用 Tailwind CSS 進行排版 -->
+    <!-- 引用工具庫 -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 引用 React 與 Babel 進行前端渲染 -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- 引用 PDF 生成工具 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
@@ -18,27 +16,38 @@
         
         body {
             font-family: 'Noto Sans TC', sans-serif;
-            background-color: #f8fafc;
+            background-color: #f1f5f9;
+            margin: 0;
+            padding: 0;
         }
 
+        /* A4 紙張標準尺寸 (絕對單位確保手機電腦一致) */
         .a4-page {
             width: 210mm;
             height: 297mm;
-            min-width: 210mm;
-            min-height: 297mm;
-            box-sizing: border-box;
             background-color: white;
-            margin-bottom: 3rem;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+            flex-shrink: 0;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
         }
 
-        @media screen and (max-width: 210mm) {
-            .a4-page {
-                width: 95vw;
-                height: 134.3vw;
-                min-width: unset;
-                min-height: unset;
-                margin-bottom: 1.5rem;
+        /* 手機端預覽縮放邏輯 */
+        .preview-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            padding: 20px 0;
+        }
+
+        @media screen and (max-width: 220mm) {
+            /* 在窄螢幕上，利用縮放讓 A4 剛好塞進螢幕，而不是改變它的寬度 */
+            .preview-scale-container {
+                transform-origin: top center;
+                /* 計算縮放比：螢幕寬度 / 210mm */
+                transform: scale(calc((100vw - 32px) / 210 / 3.78)); 
+                margin-bottom: calc(-297mm * (1 - calc((100vw - 32px) / 210 / 3.78)));
             }
         }
 
@@ -49,22 +58,21 @@
             }
             body {
                 background: white !important;
-                margin: 0;
-                padding: 0;
             }
             .print-hidden {
                 display: none !important;
             }
             .a4-page {
+                box-shadow: none !important;
                 margin: 0 !important;
                 page-break-after: always;
-                box-shadow: none !important;
-                border: none !important;
-                width: 210mm;
-                height: 297mm;
             }
-            .a4-page:last-child {
-                page-break-after: auto;
+            .preview-scale-container {
+                transform: none !important;
+                margin: 0 !important;
+            }
+            .preview-wrapper {
+                padding: 0 !important;
             }
         }
     </style>
@@ -75,104 +83,64 @@
     <script type="text/babel">
         const { useState, useEffect, useCallback, useRef } = React;
 
-        // --- 圖示組件 ---
-        const IconPrinter = () => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
-        );
-        const IconRefresh = ({ className }) => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-        );
-        const IconSettings = () => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600"><path d="M20 7h-9"></path><path d="M14 17H5"></path><circle cx="17" cy="17" r="3"></circle><circle cx="7" cy="7" r="3"></circle></svg>
-        );
-        const IconDownload = () => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-        );
-        const IconLoader = () => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>
-        );
-        const IconExternal = () => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline ml-1"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-        );
+        // --- 圖示 ---
+        const IconPrinter = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>;
+        const IconDownload = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>;
+        const IconRefresh = ({spinning}) => <svg className={`w-5 h-5 ${spinning ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>;
 
-        // --- 常數與邏輯 ---
         const DOT_SPACING = 40;
         const PADDING = 15;
         const GRID_SIZE = 3;
         const ITEMS_PER_PAGE = 6;
 
-        const generateRandomPattern = (segmentsCount = 4) => {
+        // --- 核心邏輯 ---
+        const generatePattern = (len) => {
             const points = [];
-            for (let i = 0; i < GRID_SIZE; i++) {
-                for (let j = 0; j < GRID_SIZE; j++) {
-                    points.push({ x: i, y: j });
-                }
-            }
+            for(let i=0; i<3; i++) for(let j=0; j<3; j++) points.push({x:i, y:j});
             const path = [];
-            let current = points[Math.floor(Math.random() * points.length)];
-            path.push(current);
-            const used = new Set([`${current.x},${current.y}`]);
-
-            for (let i = 0; i < segmentsCount; i++) {
+            let curr = points[Math.floor(Math.random() * points.length)];
+            path.push(curr);
+            const used = new Set([`${curr.x},${curr.y}`]);
+            for(let i=0; i<len; i++){
                 const neighbors = [];
-                for (let dx = -1; dx <= 1; dx++) {
-                    for (let dy = -1; dy <= 1; dy++) {
-                        if (dx === 0 && dy === 0) continue;
-                        const nx = current.x + dx;
-                        const ny = current.y + dy;
-                        if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE && !used.has(`${nx},${ny}`)) {
-                            neighbors.push({ x: nx, y: ny });
-                        }
-                    }
+                for(let dx=-1; dx<=1; dx++) for(let dy=-1; dy<=1; dy++){
+                    if(dx===0 && dy===0) continue;
+                    const nx = curr.x+dx, ny = curr.y+dy;
+                    if(nx>=0 && nx<3 && ny>=0 && ny<3 && !used.has(`${nx},${ny}`)) neighbors.push({x:nx, y:ny});
                 }
-                if (neighbors.length === 0) break;
-                const next = neighbors[Math.floor(Math.random() * neighbors.length)];
+                if(neighbors.length===0) break;
+                const next = neighbors[Math.floor(Math.random()*neighbors.length)];
                 path.push(next);
                 used.add(`${next.x},${next.y}`);
-                current = next;
+                curr = next;
             }
             return path;
         };
 
-        // --- 點點網格組件 ---
-        const DotGrid = ({ path = [], showPath = true }) => {
-            const dots = [];
-            for (let y = 0; y < GRID_SIZE; y++) {
-                for (let x = 0; x < GRID_SIZE; x++) {
-                    dots.push({ x, y });
-                }
-            }
-            const viewBoxSize = (GRID_SIZE - 1) * DOT_SPACING + PADDING * 2;
-
+        const DotGrid = ({ path, showPath }) => {
+            const size = (GRID_SIZE-1)*DOT_SPACING + PADDING*2;
             return (
-                <svg viewBox={`0 0 ${viewBoxSize} ${viewBoxSize}`} className="w-full h-auto" style={{ maxWidth: '120px', maxHeight: '120px' }}>
+                <svg viewBox={`0 0 ${size} ${size}`} className="w-32 h-32">
                     {showPath && path.length > 1 && (
-                        <polyline
-                            points={path.map(p => `${p.x * DOT_SPACING + PADDING},${p.y * DOT_SPACING + PADDING}`).join(' ')}
-                            fill="none"
-                            stroke="#000000"
-                            strokeWidth="5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        />
+                        <polyline points={path.map(p => `${p.x*DOT_SPACING+PADDING},${p.y*DOT_SPACING+PADDING}`).join(' ')} fill="none" stroke="black" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
                     )}
-                    {dots.map((dot, i) => (
-                        <circle key={i} cx={dot.x * DOT_SPACING + PADDING} cy={dot.y * DOT_SPACING + PADDING} r="5" className="fill-slate-400 print:fill-gray-500" />
-                    ))}
+                    {[0,1,2].map(x => [0,1,2].map(y => (
+                        <circle key={`${x}-${y}`} cx={x*DOT_SPACING+PADDING} cy={y*DOT_SPACING+PADDING} r="5" className="fill-slate-400" />
+                    )))}
                 </svg>
             );
         };
 
-        const ExerciseCard = ({ path }) => (
-            <div className="flex flex-col items-center border-2 border-slate-100 p-4 rounded-xl bg-white print:border-gray-300 print:p-4 h-full justify-between shadow-sm">
-                <div className="w-full text-center">
-                    <div className="text-sm font-black text-slate-700 mb-2 print:text-black">【看這題】</div>
-                    <div className="flex justify-center border-b-2 border-dashed border-slate-50 pb-4 mb-4 print:border-gray-200">
+        const Card = ({ path }) => (
+            <div className="flex flex-col items-center border-2 border-slate-200 p-4 rounded-2xl bg-white h-full justify-between">
+                <div className="text-center w-full">
+                    <div className="text-sm font-black text-slate-700 mb-2">【看這題】</div>
+                    <div className="flex justify-center border-b-2 border-dashed border-slate-100 pb-4 mb-4">
                         <DotGrid path={path} showPath={true} />
                     </div>
                 </div>
-                <div className="w-full text-center">
-                    <div className="text-sm font-black text-slate-700 mb-2 print:text-black">【照著畫】</div>
+                <div className="text-center w-full">
+                    <div className="text-sm font-black text-slate-700 mb-2">【照著畫】</div>
                     <div className="flex justify-center">
                         <DotGrid path={path} showPath={false} />
                     </div>
@@ -180,198 +148,143 @@
             </div>
         );
 
-        const PageHeader = () => (
-            <div className="border-b-4 border-slate-900 pb-4 mb-4 flex justify-between items-end">
-                <div>
-                    <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">運筆練習：3x3 連線卷</h2>
-                    <p className="text-slate-500 text-xs md:text-sm font-bold mt-1">請看上方圖案，並在下方點點中畫出一樣的線條。</p>
-                </div>
-                <div className="text-right text-xs md:text-base font-black text-slate-700 space-y-1">
-                    <div>日期：20____ / ____ / ____</div>
-                    <div>姓名：________________</div>
-                </div>
-            </div>
-        );
-
-        // --- 主應用程式 ---
+        // --- 主程式 ---
         function App() {
-            const [pagesCount, setPagesCount] = useState(1);
-            const [complexity, setComplexity] = useState(4);
-            const [allPagesData, setAllPagesData] = useState([]);
-            const [isGenerating, setIsGenerating] = useState(false);
-            const containerRef = useRef(null);
+            const [pages, setPages] = useState([]);
+            const [count, setCount] = useState(1);
+            const [lv, setLv] = useState(4);
+            const [loading, setLoading] = useState(false);
+            const containerRef = useRef();
 
-            const generateData = useCallback(() => {
-                const totalItems = pagesCount * ITEMS_PER_PAGE;
-                const items = Array.from({ length: totalItems }, () => generateRandomPattern(complexity));
-                const pages = [];
-                for (let i = 0; i < items.length; i += ITEMS_PER_PAGE) {
-                    pages.push(items.slice(i, i + ITEMS_PER_PAGE));
+            const refresh = useCallback(() => {
+                const newPages = [];
+                for(let p=0; p<count; p++){
+                    const items = [];
+                    for(let i=0; i<6; i++) items.push(generatePattern(lv));
+                    newPages.push(items);
                 }
-                setAllPagesData(pages);
-            }, [pagesCount, complexity]);
+                setPages(newPages);
+            }, [count, lv]);
 
-            useEffect(() => {
-                generateData();
-            }, [generateData]);
-
-            const handlePrint = () => {
-                window.print();
-            };
+            useEffect(() => refresh(), [refresh]);
 
             const downloadPdf = async () => {
-                if (isGenerating) return;
-                setIsGenerating(true);
-                
-                // 強制回到頁面頂端，確保 html2canvas 能完整捕捉 A4 區塊
-                window.scrollTo(0, 0);
-
+                setLoading(true);
+                window.scrollTo(0,0);
                 try {
                     const { jsPDF } = window.jspdf;
-                    const pdf = new jsPDF('p', 'mm', 'a4');
-                    const pages = containerRef.current.querySelectorAll('.a4-page');
-
-                    for (let i = 0; i < pages.length; i++) {
-                        const canvas = await html2canvas(pages[i], {
-                            scale: 1.5, // 適中的縮放，兼顧品質與手機性能
-                            useCORS: true,
-                            logging: false,
-                            backgroundColor: '#ffffff',
-                            // 確保獲取隱藏在捲動區域外的內容
-                            windowWidth: 210 * 3.78, // A4 px 換算
-                            windowHeight: 297 * 3.78
-                        });
-                        
-                        const imgData = canvas.toDataURL('image/jpeg', 0.85);
-                        if (i > 0) pdf.addPage();
-                        pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
-                    }
+                    const doc = new jsPDF('p', 'mm', 'a4');
+                    const elements = containerRef.current.querySelectorAll('.a4-page');
                     
-                    const fileName = `運筆練習_3x3_難度${complexity}_${new Date().getTime()}.pdf`;
-                    pdf.save(fileName);
-                } catch (error) {
-                    console.error('PDF 生成失敗', error);
-                    alert('PDF 生成失敗，建議使用電腦版或試卷列印功能。');
-                } finally {
-                    setIsGenerating(false);
+                    for(let i=0; i<elements.length; i++){
+                        const canvas = await html2canvas(elements[i], {
+                            scale: 2, // 提高解析度
+                            useCORS: true,
+                            backgroundColor: '#ffffff',
+                            width: 210 * 3.78, // 強制鎖定 A4 像素寬度
+                            height: 297 * 3.78
+                        });
+                        const img = canvas.toDataURL('image/jpeg', 0.95);
+                        if(i > 0) doc.addPage();
+                        doc.addImage(img, 'JPEG', 0, 0, 210, 297);
+                    }
+                    doc.save(`運筆練習_3x3_Lv${lv}.pdf`);
+                } catch (e) {
+                    alert('下載失敗，請嘗試使用列印功能。');
                 }
+                setLoading(false);
             };
 
             return (
-                <div className="p-4 md:p-8 font-sans">
-                    {/* 控制面板 */}
-                    <div className="max-w-5xl mx-auto mb-8 print-hidden">
-                        <div className="bg-white rounded-3xl shadow-xl p-6 md:p-8 border border-slate-200">
-                            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-                                <div>
-                                    <h1 className="text-2xl font-black text-slate-800 flex items-center gap-3">
-                                        <IconSettings />
-                                        運筆練習產生器 (3x3 版)
-                                    </h1>
-                                    <p className="text-slate-500 font-bold mt-1">自主練習空間感知與精細動作</p>
+                <div className="min-h-screen flex flex-col items-center">
+                    {/* 控制區 */}
+                    <div className="print-hidden w-full max-w-4xl px-4 py-8">
+                        <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-8 border border-slate-200">
+                            <h1 className="text-2xl font-black text-slate-800 mb-2 flex items-center gap-2">
+                                <span className="p-2 bg-blue-600 rounded-lg text-white">卷</span>
+                                運筆練習產生器 (3x3 版)
+                            </h1>
+                            
+                            <div className="space-y-6 mt-8">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                    <div>
+                                        <label className="block text-sm font-black text-slate-500 mb-2">生成頁數：{count}</label>
+                                        <input type="range" min="1" max="10" value={count} onChange={e=>setCount(parseInt(e.target.value))} className="w-full h-2 bg-slate-200 rounded-lg appearance-none accent-blue-600 cursor-pointer" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-black text-slate-500 mb-2">題目難度：{lv}</label>
+                                        <input type="range" min="2" max="8" value={lv} onChange={e=>setLv(parseInt(e.target.value))} className="w-full h-2 bg-slate-200 rounded-lg appearance-none accent-blue-600 cursor-pointer" />
+                                    </div>
                                 </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex gap-3">
-                                    <button 
-                                        onClick={generateData} 
-                                        className="flex items-center justify-center gap-2 px-4 py-3 bg-slate-100 text-slate-700 font-black rounded-xl hover:bg-slate-200 transition-all active:scale-95"
-                                    >
-                                        <IconRefresh className={isGenerating ? "animate-spin" : ""} />
-                                        換一組題目
+
+                                <div className="flex flex-wrap gap-3">
+                                    <button onClick={refresh} className="flex-1 min-w-[140px] flex items-center justify-center gap-2 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-all">
+                                        <IconRefresh spinning={loading} /> 換一組題目
                                     </button>
-                                    <button 
-                                        onClick={handlePrint} 
-                                        className="flex items-center justify-center gap-2 px-5 py-3 bg-slate-800 text-white font-black rounded-xl hover:bg-black shadow-lg transition-all active:scale-95"
-                                    >
-                                        <IconPrinter />
-                                        電腦列印
+                                    <button onClick={()=>window.print()} className="flex-1 min-w-[140px] flex items-center justify-center gap-2 py-3 bg-slate-800 text-white font-bold rounded-xl hover:bg-black transition-all">
+                                        <IconPrinter /> 電腦列印
                                     </button>
-                                    <button 
-                                        onClick={downloadPdf} 
-                                        disabled={isGenerating} 
-                                        className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white font-black rounded-xl hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all active:scale-95 sm:col-span-2 lg:col-auto disabled:bg-blue-300"
-                                    >
-                                        {isGenerating ? <IconLoader /> : <IconDownload />}
-                                        {isGenerating ? "產生中..." : "下載 PDF (手機可用)"}
+                                    <button onClick={downloadPdf} disabled={loading} className="flex-[2] min-w-[200px] flex items-center justify-center gap-2 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-200 disabled:opacity-50 transition-all">
+                                        {loading ? <span className="animate-spin">⌛</span> : <IconDownload />} 
+                                        {loading ? "處理中..." : "下載 PDF (高品質)"}
                                     </button>
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8 pt-8 border-t-2 border-slate-50">
-                                <div>
-                                    <label className="block text-lg font-black text-slate-700 mb-4">生成頁數 (A4)</label>
-                                    <div className="flex items-center gap-6">
-                                        <input type="range" min="1" max="10" value={pagesCount} onChange={(e) => setPagesCount(parseInt(e.target.value))} className="flex-1 h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600" />
-                                        <span className="text-3xl font-black text-blue-600 min-w-[3.5rem] text-center">{pagesCount}</span>
-                                    </div>
+                            {/* 設計者資訊 */}
+                            <div className="mt-8 pt-6 border-t border-slate-100 space-y-3">
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-sm">
+                                    <span className="font-bold text-slate-400">設計者：</span>
+                                    <a href="https://www.facebook.com/profile.php?id=100063748491881" target="_blank" className="text-blue-600 font-bold hover:underline">鍾孟修職能治療師 (粉絲專頁)</a>
                                 </div>
-                                <div>
-                                    <label className="block text-lg font-black text-slate-700 mb-4">題目難度 (Lv.)</label>
-                                    <div className="flex items-center gap-6">
-                                        <input type="range" min="2" max="7" value={complexity} onChange={(e) => setComplexity(parseInt(e.target.value))} className="flex-1 h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600" />
-                                        <span className="text-3xl font-black text-blue-600 min-w-[3.5rem] text-center">{complexity}</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* 設計者與新書資訊 */}
-                            <div className="mt-8 pt-6 border-t border-slate-100">
-                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                    <div className="text-sm">
-                                        <span className="font-bold text-slate-700">設計者：</span>
-                                        <a 
-                                            href="https://www.facebook.com/profile.php?id=100063748491881" 
-                                            target="_blank" 
-                                            rel="noopener noreferrer"
-                                            className="text-blue-600 font-bold hover:underline inline-flex items-center"
-                                        >
-                                            鍾孟修職能治療師
-                                            <IconExternal />
-                                        </a>
-                                    </div>
-                                    <div className="text-sm">
-                                        <span className="font-bold text-slate-700">最新著作：</span>
-                                        <a 
-                                            href="https://www.books.com.tw/products/0011022363?sloc=main" 
-                                            target="_blank" 
-                                            rel="noopener noreferrer"
-                                            className="text-orange-600 font-bold hover:underline inline-flex items-center"
-                                        >
-                                            讓你健康不失智的體智能
-                                            <IconExternal />
-                                        </a>
-                                    </div>
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-sm">
+                                    <span className="font-bold text-slate-400">新書推薦：</span>
+                                    <a href="https://www.books.com.tw/products/0011022363?sloc=main" target="_blank" className="text-orange-600 font-bold hover:underline">讓你健康不失智的體智能</a>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* 試卷區域 */}
-                    <div ref={containerRef} className="flex flex-col items-center">
-                        {allPagesData.map((pageItems, pageIdx) => (
-                            <div key={pageIdx} className="a4-page overflow-hidden">
-                                <div className="h-full p-[15mm] md:p-[20mm] flex flex-col">
-                                    <PageHeader />
-                                    <div className="flex-1 flex flex-col justify-around py-4">
-                                        <div className="grid grid-cols-3 gap-4 md:gap-8">
-                                            {pageItems.slice(0, 3).map((path, idx) => <ExerciseCard key={idx} path={path} />)}
+                    {/* 預覽與 A4 區域 */}
+                    <div ref={containerRef} className="preview-wrapper">
+                        {pages.map((pageItems, pIdx) => (
+                            <div key={pIdx} className="preview-scale-container">
+                                <div className="a4-page p-[20mm] flex flex-col">
+                                    {/* 頁首 */}
+                                    <div className="border-b-4 border-slate-900 pb-4 mb-4 flex justify-between items-end">
+                                        <div>
+                                            <h2 className="text-3xl font-black text-slate-900">運筆練習：3x3 連線卷</h2>
+                                            <p className="text-slate-500 text-sm font-bold mt-1">觀察上方路徑，在下方點點繪製出完全相同的圖案。</p>
                                         </div>
-                                        <div className="grid grid-cols-3 gap-4 md:gap-8">
-                                            {pageItems.slice(3, 6).map((path, idx) => <ExerciseCard key={idx + 3} path={path} />)}
+                                        <div className="text-right text-sm font-black text-slate-700">
+                                            <div>日期：20____ / ____ / ____</div>
+                                            <div className="mt-1">姓名：________________</div>
                                         </div>
                                     </div>
-                                    <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center text-[10px] md:text-xs font-bold text-slate-400">
-                                        <span>難度指數：{complexity}</span>
-                                        <span className="hidden sm:inline">3x3 空間感知訓練 • 設計：鍾孟修職能治療師</span>
-                                        <span>第 {pageIdx + 1} 頁</span>
+
+                                    {/* 內容區 */}
+                                    <div className="flex-1 flex flex-col justify-around py-4">
+                                        <div className="grid grid-cols-3 gap-8">
+                                            {pageItems.slice(0,3).map((path, i) => <Card key={i} path={path} />)}
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-8">
+                                            {pageItems.slice(3,6).map((path, i) => <Card key={i+3} path={path} />)}
+                                        </div>
+                                    </div>
+
+                                    {/* 頁尾 */}
+                                    <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                        <span>難度: Lv.{lv}</span>
+                                        <span>設計者: 鍾孟修職能治療師</span>
+                                        <span>第 {pIdx+1} 頁</span>
                                     </div>
                                 </div>
                             </div>
                         ))}
                     </div>
-                    
-                    {/* 底欄 */}
-                    <footer className="text-center text-slate-400 text-xs py-8 print-hidden">
-                        © 2024 運筆練習產生器 - 鍾孟修職能治療師 設計
+
+                    <footer className="print-hidden py-10 text-slate-400 text-xs font-bold">
+                        © 2024 運筆練習產生器 • 專業空間感知訓練
                     </footer>
                 </div>
             );
