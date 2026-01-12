@@ -21,7 +21,27 @@
             padding: 0;
         }
 
-        /* A4 紙張標準尺寸 (絕對單位確保手機電腦一致) */
+        /* --- A4 預覽縮放核心邏輯 --- */
+        
+        /* 1. 外部容器：負責撐開空間與處理捲動 */
+        .preview-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            padding: 20px 0;
+            overflow-x: hidden; /* 防止左右出現捲動條 */
+        }
+
+        /* 2. 縮放容器：在手機上根據螢幕寬度縮放 A4 內容 */
+        .preview-scale-container {
+            transform-origin: top center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* 3. A4 實體：固定物理尺寸，確保 PDF 輸出與電腦版一致 */
         .a4-page {
             width: 210mm;
             height: 297mm;
@@ -30,24 +50,17 @@
             overflow: hidden;
             flex-shrink: 0;
             box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            margin-bottom: 20px; /* 頁與頁之間的距離 */
         }
 
-        /* 手機端預覽縮放邏輯 */
-        .preview-wrapper {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            width: 100%;
-            padding: 20px 0;
-        }
-
-        @media screen and (max-width: 220mm) {
-            /* 在窄螢幕上，利用縮放讓 A4 剛好塞進螢幕，而不是改變它的寬度 */
+        @media screen and (max-width: 215mm) {
+            /* 當螢幕小於 A4 寬度時，動態計算縮放比例 */
             .preview-scale-container {
-                transform-origin: top center;
-                /* 計算縮放比：螢幕寬度 / 210mm */
-                transform: scale(calc((100vw - 32px) / 210 / 3.78)); 
-                margin-bottom: calc(-297mm * (1 - calc((100vw - 32px) / 210 / 3.78)));
+                /* 縮放比 = (螢幕寬度 - 邊距) / A4標準寬度 */
+                --zoom-factor: calc((100vw - 20px) / 210 / 3.7795); 
+                transform: scale(var(--zoom-factor));
+                /* 修正縮放後導致的版面塌陷問題 */
+                margin-bottom: calc(297mm * (var(--zoom-factor) - 1));
             }
         }
 
@@ -70,9 +83,11 @@
             .preview-scale-container {
                 transform: none !important;
                 margin: 0 !important;
+                width: auto !important;
             }
             .preview-wrapper {
                 padding: 0 !important;
+                overflow: visible !important;
             }
         }
     </style>
@@ -91,7 +106,6 @@
         const DOT_SPACING = 40;
         const PADDING = 15;
         const GRID_SIZE = 3;
-        const ITEMS_PER_PAGE = 6;
 
         // --- 核心邏輯 ---
         const generatePattern = (len) => {
@@ -170,7 +184,9 @@
 
             const downloadPdf = async () => {
                 setLoading(true);
+                // 下載前強制捲動到頂部，防止截圖偏移
                 window.scrollTo(0,0);
+                
                 try {
                     const { jsPDF } = window.jspdf;
                     const doc = new jsPDF('p', 'mm', 'a4');
@@ -178,11 +194,13 @@
                     
                     for(let i=0; i<elements.length; i++){
                         const canvas = await html2canvas(elements[i], {
-                            scale: 2, // 提高解析度
+                            scale: 2, // 高品質
                             useCORS: true,
                             backgroundColor: '#ffffff',
-                            width: 210 * 3.78, // 強制鎖定 A4 像素寬度
-                            height: 297 * 3.78
+                            width: 210 * 3.78, 
+                            height: 297 * 3.78,
+                            scrollX: 0,
+                            scrollY: 0
                         });
                         const img = canvas.toDataURL('image/jpeg', 0.95);
                         if(i > 0) doc.addPage();
@@ -190,13 +208,13 @@
                     }
                     doc.save(`運筆練習_3x3_Lv${lv}.pdf`);
                 } catch (e) {
-                    alert('下載失敗，請嘗試使用列印功能。');
+                    alert('下載失敗，建議使用電腦版瀏覽器。');
                 }
                 setLoading(false);
             };
 
             return (
-                <div className="min-h-screen flex flex-col items-center">
+                <div className="min-h-screen flex flex-col items-center pb-12">
                     {/* 控制區 */}
                     <div className="print-hidden w-full max-w-4xl px-4 py-8">
                         <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-8 border border-slate-200">
@@ -218,28 +236,34 @@
                                 </div>
 
                                 <div className="flex flex-wrap gap-3">
-                                    <button onClick={refresh} className="flex-1 min-w-[140px] flex items-center justify-center gap-2 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-all">
+                                    <button onClick={refresh} className="flex-1 min-w-[140px] flex items-center justify-center gap-2 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-all active:scale-95">
                                         <IconRefresh spinning={loading} /> 換一組題目
                                     </button>
-                                    <button onClick={()=>window.print()} className="flex-1 min-w-[140px] flex items-center justify-center gap-2 py-3 bg-slate-800 text-white font-bold rounded-xl hover:bg-black transition-all">
+                                    <button onClick={()=>window.print()} className="flex-1 min-w-[140px] flex items-center justify-center gap-2 py-3 bg-slate-800 text-white font-bold rounded-xl hover:bg-black transition-all active:scale-95">
                                         <IconPrinter /> 電腦列印
                                     </button>
-                                    <button onClick={downloadPdf} disabled={loading} className="flex-[2] min-w-[200px] flex items-center justify-center gap-2 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-200 disabled:opacity-50 transition-all">
+                                    <button onClick={downloadPdf} disabled={loading} className="flex-[2] min-w-[200px] flex items-center justify-center gap-2 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-200 disabled:opacity-50 transition-all active:scale-95">
                                         {loading ? <span className="animate-spin">⌛</span> : <IconDownload />} 
                                         {loading ? "處理中..." : "下載 PDF (高品質)"}
                                     </button>
                                 </div>
                             </div>
 
-                            {/* 設計者資訊 */}
+                            {/* 設計者與推廣資訊 */}
                             <div className="mt-8 pt-6 border-t border-slate-100 space-y-3">
                                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-sm">
                                     <span className="font-bold text-slate-400">設計者：</span>
-                                    <a href="https://www.facebook.com/profile.php?id=100063748491881" target="_blank" className="text-blue-600 font-bold hover:underline">鍾孟修職能治療師 (粉絲專頁)</a>
+                                    <a href="https://www.facebook.com/profile.php?id=100063748491881" target="_blank" className="text-blue-600 font-bold hover:underline flex items-center">
+                                        鍾孟修職能治療師 (粉絲專頁)
+                                        <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                                    </a>
                                 </div>
                                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-sm">
                                     <span className="font-bold text-slate-400">新書推薦：</span>
-                                    <a href="https://www.books.com.tw/products/0011022363?sloc=main" target="_blank" className="text-orange-600 font-bold hover:underline">讓你健康不失智的體智能</a>
+                                    <a href="https://www.books.com.tw/products/0011022363?sloc=main" target="_blank" className="text-orange-600 font-bold hover:underline flex items-center">
+                                        讓你健康不失智的體智能
+                                        <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                                    </a>
                                 </div>
                             </div>
                         </div>
@@ -247,9 +271,9 @@
 
                     {/* 預覽與 A4 區域 */}
                     <div ref={containerRef} className="preview-wrapper">
-                        {pages.map((pageItems, pIdx) => (
-                            <div key={pIdx} className="preview-scale-container">
-                                <div className="a4-page p-[20mm] flex flex-col">
+                        <div className="preview-scale-container">
+                            {pages.map((pageItems, pIdx) => (
+                                <div key={pIdx} className="a4-page p-[20mm] flex flex-col">
                                     {/* 頁首 */}
                                     <div className="border-b-4 border-slate-900 pb-4 mb-4 flex justify-between items-end">
                                         <div>
@@ -279,12 +303,13 @@
                                         <span>第 {pIdx+1} 頁</span>
                                     </div>
                                 </div>
-                            </div>
-                        ))}
+                            ))}
+                        </div>
                     </div>
 
-                    <footer className="print-hidden py-10 text-slate-400 text-xs font-bold">
-                        © 2024 運筆練習產生器 • 專業空間感知訓練
+                    <footer className="print-hidden py-10 text-slate-400 text-xs font-bold text-center px-4">
+                        © 2024 運筆練習產生器 • 專業空間感知訓練系統<br/>
+                        鍾孟修職能治療師 專業設計
                     </footer>
                 </div>
             );
